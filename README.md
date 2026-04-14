@@ -1,4 +1,4 @@
-# 🐘 Hadoop Docker Dev
+# 🐘 Hadoop Quick Start Docker
 
 A lightweight, Docker-based Hadoop development environment. No 10GB VMs, no VirtualBox kernel issues — just Docker.
 
