@@ -1,0 +1,12 @@
+# HDFS persistent state
+data/
+
+# Bash history
+history/
+
+# Data files in shared (keep scripts, ignore data)
+shared/*.csv
+shared/*.txt
+shared/*.json
+shared/*.xml
+shared/*.parquet
