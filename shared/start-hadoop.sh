@@ -2,6 +2,7 @@
 
 HADOOP_HOME="${HADOOP_HOME:-/opt/hadoop-3.2.1}"
 HDFS_BIN="${HDFS_BIN:-}"
+START_LOCAL_DATANODE="${START_LOCAL_DATANODE:-true}"
 NAME_DIR="/tmp/hadoop-root/dfs/name"
 DATA_DIR="/tmp/hadoop-root/dfs/data"
 LOG_DIR="${HADOOP_HOME}/logs"
@@ -35,7 +36,12 @@ if [ ! -f "${NAME_DIR}/current/VERSION" ]; then
 fi
 
 "${HDFS_BIN}" --daemon start namenode || true
-"${HDFS_BIN}" --daemon start datanode || true
+
+if [ "${START_LOCAL_DATANODE}" = "true" ]; then
+	"${HDFS_BIN}" --daemon start datanode || true
+else
+	echo "Skipping local DataNode startup (START_LOCAL_DATANODE=${START_LOCAL_DATANODE})"
+fi
 
 echo "Starting YARN..."
 yarn --daemon start resourcemanager || true
