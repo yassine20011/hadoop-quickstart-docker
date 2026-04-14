@@ -28,6 +28,9 @@ A lightweight, Docker-based Hadoop development environment. No 10GB VMs, no Virt
 
 ## Getting Started
 
+| ![Hadoop demo](demo-hadoop.gif) |
+| :----------------------------: |
+
 ```bash
 # from project root
 ./setup.sh
