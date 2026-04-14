@@ -6,6 +6,18 @@ A lightweight, Docker-based Hadoop development environment. No 10GB VMs, no Virt
 
 ---
 
+## Why not the Cloudera QuickStart VM?
+
+| Metric | Cloudera VM | This setup |
+| --- | --- | --- |
+| Size | ~10 GB | ~1 GB |
+| Hadoop version | 2.6 (CDH5) | 3.2.1 |
+| Startup time | ~5 min | ~15 sec |
+| Kernel issues | Yes (VirtualBox) | None |
+| File sharing | Painful | Just drop in `shared/` |
+
+---
+
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) installed and running
@@ -128,18 +140,6 @@ Re-running `./run.sh` will start fresh automatically.
 - If you see `docker: invalid reference format`, check for inline comments after `\` in multi-line docker commands.
 - If `hdfs` is not found, exit and run `./run.sh` again so shell env vars are reloaded.
 - If NameNode fails to start but DataNode starts, ensure the data volume is mounted to `/tmp/hadoop-root` (not another path).
-
----
-
-## Why not the Cloudera QuickStart VM?
-
-| Metric | Cloudera VM | This setup |
-| --- | --- | --- |
-| Size | ~10 GB | ~1 GB |
-| Hadoop version | 2.6 (CDH5) | 3.2.1 |
-| Startup time | ~5 min | ~15 sec |
-| Kernel issues | Yes (VirtualBox) | None |
-| File sharing | Painful | Just drop in `shared/` |
 
 ---
 
