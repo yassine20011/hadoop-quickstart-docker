@@ -3,6 +3,8 @@ services:
     image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
     container_name: hadoop-namenode
     hostname: namenode
+    env_file:
+      - ./hadoop.env
     ports:
       - "9870:9870"
       - "8088:8088"
@@ -22,6 +24,8 @@ services:
     image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
     depends_on:
       - namenode
+    env_file:
+      - ./hadoop.env
     environment:
       CORE_CONF_fs_defaultFS: hdfs://namenode:8020
     volumes:
