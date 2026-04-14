@@ -53,6 +53,7 @@ That's it — you'll land in an interactive shell inside the NameNode container 
 ├── setup.sh                # One-time local setup (dirs + permissions)
 ├── run.sh                  # Compose launcher (prompts + scales DataNodes)
 ├── docker-compose.yml      # NameNode + scalable DataNode services
+├── hadoop.env              # Hadoop config overrides (core/hdfs/yarn/mapred)
 ├── shared/
 │   ├── start-hadoop.sh     # Starts NameNode + YARN + JobHistory
 │   ├── start-datanode.sh   # Starts DataNode in DataNode containers
@@ -64,6 +65,28 @@ That's it — you'll land in an interactive shell inside the NameNode container 
 ```
 
 > `shared/` is your bridge: anything you place here is instantly available inside the container at `/shared`.
+
+---
+
+## Hadoop Config Overrides (`hadoop.env`)
+
+You can override Hadoop properties in [hadoop.env](hadoop.env) without editing scripts.
+
+Examples:
+
+```env
+HDFS_CONF_dfs_replication=2
+HDFS_CONF_dfs_blocksize=268435456
+```
+
+Then restart:
+
+```bash
+docker compose down --remove-orphans
+./run.sh
+```
+
+Tip: if you run only 1 DataNode, keep `HDFS_CONF_dfs_replication=1`.
 
 ---
 
