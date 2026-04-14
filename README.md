@@ -21,6 +21,7 @@ A lightweight, Docker-based Hadoop development environment. No 10GB VMs, no Virt
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) installed and running
+- Docker Compose (`docker compose` or `docker-compose`)
 - Bash (Linux/macOS) or WSL2 (Windows)
 
 ---
@@ -33,7 +34,15 @@ A lightweight, Docker-based Hadoop development environment. No 10GB VMs, no Virt
 ./run.sh
 ```
 
-That's it — you'll land in an interactive shell inside the container with Hadoop fully running.
+`run.sh` now prompts for how many DataNodes to start (default: `2`).
+
+Example:
+
+```text
+How many DataNodes do you want? [2]: 2
+```
+
+That's it — you'll land in an interactive shell inside the NameNode container with Hadoop fully running.
 
 ---
 
@@ -42,12 +51,16 @@ That's it — you'll land in an interactive shell inside the container with Hado
 ```text
 .
 ├── setup.sh                # One-time local setup (dirs + permissions)
-├── run.sh                  # Main entry point — starts + attaches to container
+├── run.sh                  # Compose launcher (prompts + scales DataNodes)
+├── docker-compose.yml      # NameNode + scalable DataNode services
 ├── shared/
-│   ├── start-hadoop.sh     # Starts NameNode + DataNode inside container
+│   ├── start-hadoop.sh     # Starts NameNode + YARN + JobHistory
+│   ├── start-datanode.sh   # Starts DataNode in DataNode containers
+│   ├── compose-namenode.sh # Compose wrapper for NameNode service
+│   ├── compose-datanode.sh # Compose wrapper for DataNode service
 │   └── (your data files)   # Drop files here to access them in the container
 └── data/
-  └── dfs/                # Persistent HDFS state (gitignored)
+  └── nn/                   # NameNode persistent state
 ```
 
 > `shared/` is your bridge: anything you place here is instantly available inside the container at `/shared`.
@@ -85,14 +98,36 @@ Once the container is running, open these in your browser:
 ## Useful Commands
 
 ```bash
-# reconnect to running container
-docker exec -it hadoop-dev bash
+# reconnect to NameNode container
+docker compose exec namenode bash
 
-# stop and remove container
-docker rm -f hadoop-dev
+# list cluster containers
+docker ps --filter name=hadoop-
+
+# stop and remove cluster
+docker compose down --remove-orphans
 
 # start again
 ./run.sh
+
+# start without attaching shell (CI / scripts)
+NO_ATTACH=1 ./run.sh
+```
+
+---
+
+## Replication Test (2+ DataNodes)
+
+Start cluster with at least 2 DataNodes, then run:
+
+```bash
+hdfs dfs -setrep -w 2 /user/root/tp_bigdata/purchases.txt
+```
+
+Verify:
+
+```bash
+hdfs fsck /user/root/tp_bigdata/purchases.txt -files -blocks -locations
 ```
 
 ---
@@ -128,18 +163,10 @@ hdfs dfs -cat /user/root/output/part-r-00000
 ## Stopping the Environment
 
 ```bash
-docker rm -f hadoop-dev
+docker compose down --remove-orphans
 ```
 
 Re-running `./run.sh` will start fresh automatically.
-
----
-
-## Troubleshooting
-
-- If you see `docker: invalid reference format`, check for inline comments after `\` in multi-line docker commands.
-- If `hdfs` is not found, exit and run `./run.sh` again so shell env vars are reloaded.
-- If NameNode fails to start but DataNode starts, ensure the data volume is mounted to `/tmp/hadoop-root` (not another path).
 
 ---
 
