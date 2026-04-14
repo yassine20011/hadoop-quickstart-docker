@@ -1,0 +1,32 @@
+services:
+  namenode:
+    image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
+    container_name: hadoop-namenode
+    hostname: namenode
+    ports:
+      - "9870:9870"
+      - "8088:8088"
+      - "19888:19888"
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+      START_LOCAL_DATANODE: "false"
+    volumes:
+      - ./shared:/shared
+      - ./data/nn:/tmp/hadoop-root
+      - ./history/.bash_history:/root/.bash_history
+    command:
+      - bash
+      - /shared/compose-namenode.sh
+
+  datanode:
+    image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
+    depends_on:
+      - namenode
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+    volumes:
+      - ./shared:/shared
+      - /tmp/hadoop-root
+    command:
+      - bash
+      - /shared/compose-datanode.sh
