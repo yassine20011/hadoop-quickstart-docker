@@ -55,7 +55,7 @@ That's it — you'll land in an interactive shell inside the NameNode container 
 .
 ├── setup.sh                # One-time local setup (dirs + permissions)
 ├── run.sh                  # Compose launcher (prompts + scales DataNodes)
-├── docker-compose.yml      # NameNode + scalable DataNode services
+├── docker-compose.yml      # NameNode + scalable DataNode + Hive services
 ├── hadoop.env              # Hadoop config overrides (core/hdfs/yarn/mapred)
 ├── shared/
 │   ├── start-hadoop.sh     # Starts NameNode + YARN + JobHistory
@@ -64,7 +64,8 @@ That's it — you'll land in an interactive shell inside the NameNode container 
 │   ├── compose-datanode.sh # Compose wrapper for DataNode service
 │   └── (your data files)   # Drop files here to access them in the container
 └── data/
-  └── nn/                   # NameNode persistent state
+  ├── nn/                   # NameNode persistent state
+  └── hive/                 # Hive metastore PostgreSQL persistent state
 ```
 
 > `shared/` is your bridge: anything you place here is instantly available inside the container at `/shared`.
@@ -118,6 +119,7 @@ Once the container is running, open these in your browser:
 | HDFS NameNode | <http://localhost:9870> |
 | YARN Resource Manager | <http://localhost:8088> |
 | Job History Server | <http://localhost:19888> |
+| HiveServer2 (JDBC/Beeline) | `localhost:10000` |
 
 ---
 
@@ -126,6 +128,9 @@ Once the container is running, open these in your browser:
 ```bash
 # reconnect to NameNode container
 docker compose exec namenode bash
+
+# test HiveServer2 from NameNode container
+beeline -u jdbc:hive2://hive-server:10000 -n hive
 
 # list cluster containers
 docker ps --filter name=hadoop-

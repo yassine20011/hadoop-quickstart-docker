@@ -30,8 +30,10 @@ fi
 
 # ensure host directories exist
 mkdir -p "$(pwd)/data/nn"
+mkdir -p "$(pwd)/data/hive/postgresql"
 mkdir -p "$(pwd)/history"
 touch "$(pwd)/history/.bash_history"
+chmod 777 "$(pwd)/data/hive/postgresql"
 
 # cleanup legacy containers from previous non-compose runs
 docker rm -f hadoop-namenode hadoop-dev >/dev/null 2>&1 || true
@@ -53,6 +55,7 @@ echo "Cluster started: 1 NameNode + ${DN_COUNT} DataNode(s)"
 echo "- NameNode UI:  http://localhost:9870"
 echo "- YARN UI:      http://localhost:8088"
 echo "- JobHistory:   http://localhost:19888"
+echo "- HiveServer2:  localhost:10000"
 
 # open interactive shell in NameNode service
 if [ "${NO_ATTACH:-0}" = "1" ]; then

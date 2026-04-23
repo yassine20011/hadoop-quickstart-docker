@@ -34,3 +34,49 @@ services:
     command:
       - bash
       - /shared/compose-datanode.sh
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name: hive-metastore-postgresql
+    hostname: hive-metastore-postgresql
+    environment:
+      POSTGRES_DB: metastore
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+    volumes:
+      - ./data/hive/postgresql:/var/lib/postgresql/data
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: hive-metastore
+    hostname: hive-metastore
+    depends_on:
+      - namenode
+      - hive-metastore-postgresql
+    env_file:
+      - ./hadoop.env
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+      HIVE_SITE_CONF_hive_metastore_uris: thrift://hive-metastore:9083
+      SERVICE_PRECONDITION: namenode:9870 hive-metastore-postgresql:5432
+    command: /opt/hive/bin/hive --service metastore
+    ports:
+      - "9083:9083"
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: hive-server
+    hostname: hive-server
+    depends_on:
+      - namenode
+      - datanode
+      - hive-metastore
+    env_file:
+      - ./hadoop.env
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+      HIVE_SITE_CONF_hive_metastore_uris: thrift://hive-metastore:9083
+      SERVICE_PRECONDITION: namenode:9870 hive-metastore:9083
+    ports:
+      - "10000:10000"
+      - "10002:10002"
