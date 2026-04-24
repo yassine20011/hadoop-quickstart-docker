@@ -37,13 +37,16 @@ A lightweight, Docker-based Hadoop development environment. No 10GB VMs, no Virt
 ./run.sh
 ```
 
-`run.sh` now prompts for how many DataNodes to start (default: `2`).
+`run.sh` prompts for how many DataNodes to start (default: `2`) and whether to start Hive.
 
 Example:
 
 ```text
 How many DataNodes do you want? [2]: 2
+Start Hive (metastore + HiveServer2)? [y/N]: y
 ```
+
+If you answer `N` (or just press Enter), only the Hadoop core services start — no Hive containers, faster startup.
 
 That's it — you'll land in an interactive shell inside the NameNode container with Hadoop fully running.
 
@@ -129,7 +132,10 @@ Once the container is running, open these in your browser:
 # reconnect to NameNode container
 docker compose exec namenode bash
 
-# test HiveServer2 from NameNode container
+# connect to HiveServer2 via Beeline (from host)
+docker exec -it hive-server beeline -u jdbc:hive2://localhost:10000
+
+# connect to HiveServer2 via Beeline (from inside NameNode container)
 beeline -u jdbc:hive2://hive-server:10000 -n hive
 
 # list cluster containers
@@ -143,6 +149,9 @@ docker compose down --remove-orphans
 
 # start without attaching shell (CI / scripts)
 NO_ATTACH=1 ./run.sh
+
+# start with Hive enabled non-interactively (CI / scripts)
+START_HIVE=y NO_ATTACH=1 ./run.sh
 ```
 
 ---
@@ -188,6 +197,24 @@ hdfs dfs -cat /user/root/output/part-r-00000
 | Hadoop | 3.2.1 |
 | Java | 8 |
 | Base Image | [bde2020/hadoop-base](https://hub.docker.com/r/bde2020/hadoop-base) |
+
+---
+
+## HiveServer2 Startup Reliability
+
+`run.sh` uses a layered health-check chain to ensure HiveServer2 is fully ready before handing control back to you — no more "Connection refused" on first connect.
+
+The startup sequence is:
+
+1. NameNode HDFS report passes
+2. HDFS `/user/hive/warehouse` directory created and permissioned
+3. `hive-metastore` and `hive-server` containers running
+4. Metastore thrift port **9083** accepting TCP connections
+5. `hive-server` restarted cleanly against the ready metastore
+6. HiveServer2 port **10000** accepting TCP connections
+7. Beeline JDBC handshake succeeds (`!quit`)
+
+Only after all 7 stages pass does `run.sh` print the cluster summary and drop you into the NameNode shell.
 
 ---
 

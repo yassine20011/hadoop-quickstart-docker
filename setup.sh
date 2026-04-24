@@ -15,12 +15,15 @@ touch history/.bash_history
 
 # Fix permissions (Docker runs as root)
 chmod 777 data/nn
-chmod 777 data/hive/postgresql
+if ! chmod 777 data/hive/postgresql 2>/dev/null; then
+	echo "WARN: could not chmod data/hive/postgresql (likely owned by a container UID); continuing."
+fi
 
 # Make scripts executable
 chmod +x run.sh
 chmod +x shared/start-hadoop.sh
 chmod +x shared/start-datanode.sh
+chmod +x shared/start-hive-metastore.sh
 chmod +x shared/compose-namenode.sh
 chmod +x shared/compose-datanode.sh
 
