@@ -159,12 +159,28 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
+echo "Waiting for ${DN_COUNT} DataNode(s) to register..."
+for i in $(seq 1 60); do
+  LIVE_DNS=$(${COMPOSE_CMD} exec -T namenode /opt/hadoop-3.2.1/bin/hdfs dfsadmin -report 2>/dev/null \
+    | grep -c "^Name:" || true)
+  if [ "${LIVE_DNS}" -ge "${DN_COUNT}" ]; then
+    break
+  fi
+  sleep 2
+done
+
+# Leave safe mode once DataNodes are registered
+${COMPOSE_CMD} exec -T namenode bash -lc '
+  export HADOOP_HOME=/opt/hadoop-3.2.1
+  export PATH="${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH}"
+  hdfs dfsadmin -safemode leave >/dev/null 2>&1 || true
+' 2>&1 | grep -v "ttyname failed" || true
+
 if [ "${START_HIVE}" = "1" ]; then
   echo "Preparing HDFS for Hive..."
   ${COMPOSE_CMD} exec -T namenode bash -lc '
     export HADOOP_HOME=/opt/hadoop-3.2.1
     export PATH="${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH}"
-    hdfs dfsadmin -safemode leave >/dev/null 2>&1 || true
     hdfs dfs -mkdir -p /user/hive/warehouse >/dev/null 2>&1 || true
     hdfs dfs -chmod 777 /user/hive/warehouse >/dev/null 2>&1 || true
   ' 2>&1 | grep -v "ttyname failed" || true
