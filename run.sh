@@ -43,7 +43,7 @@ fi
 
 is_service_running() {
   local service="$1"
-  ${COMPOSE_CMD} ps --status running --services | grep -qx "${service}"
+  ${COMPOSE_CMD} ${COMPOSE_FILES} ps --status running --services | grep -qx "${service}"
 }
 
 reset_hive_postgres_data() {
@@ -71,9 +71,9 @@ attempt_hive_recovery_if_needed() {
   if ${COMPOSE_CMD} logs --no-color hive-metastore 2>/dev/null | grep -q "Version information not found in metastore"; then
     echo "WARN: Hive metastore schema state is invalid. Attempting automatic recovery..."
     recovered=1
-    ${COMPOSE_CMD} down --remove-orphans >/dev/null 2>&1 || true
+    ${COMPOSE_CMD} ${COMPOSE_FILES} down --remove-orphans >/dev/null 2>&1 || true
     reset_hive_postgres_data
-    ${COMPOSE_CMD} up -d --scale datanode="${DN_COUNT}"
+    ${COMPOSE_CMD} ${COMPOSE_FILES} up -d
 
     for i in $(seq 1 45); do
       if is_service_running hive-metastore && is_service_running hive-server; then
@@ -127,8 +127,33 @@ wait_for_hiveserver2_ready() {
   return 1
 }
 
-# ensure host directories exist
-mkdir -p "$(pwd)/data/nn"
+# generate per-DataNode compose override with isolated volumes
+DATANODES_COMPOSE="$(pwd)/docker-compose.datanodes.yml"
+{
+  echo "services:"
+  for n in $(seq 1 "${DN_COUNT}"); do
+    mkdir -p "$(pwd)/data/dn${n}"
+    chmod 777 "$(pwd)/data/dn${n}"
+    echo "  datanode${n}:"
+    echo "    image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8"
+    echo "    container_name: hadoop-datanode-${n}"
+    echo "    hostname: datanode${n}"
+    echo "    depends_on:"
+    echo "      - namenode"
+    echo "    env_file:"
+    echo "      - ./hadoop.env"
+    echo "    environment:"
+    echo "      CORE_CONF_fs_defaultFS: hdfs://namenode:8020"
+    echo "    volumes:"
+    echo "      - ./shared:/shared"
+    echo "      - ./data/dn${n}:/tmp/hadoop-root"
+    echo "    command:"
+    echo "      - bash"
+    echo "      - /shared/compose-datanode.sh"
+  done
+} > "${DATANODES_COMPOSE}"
+
+COMPOSE_FILES="-f docker-compose.yml -f ${DATANODES_COMPOSE}"
 mkdir -p "$(pwd)/data/hive/postgresql"
 mkdir -p "$(pwd)/history"
 touch "$(pwd)/history/.bash_history"
@@ -141,11 +166,11 @@ docker rm -f hadoop-namenode hadoop-dev >/dev/null 2>&1 || true
 docker ps -a --format '{{.Names}}' | grep '^hadoop-datanode-' | xargs -r docker rm -f >/dev/null 2>&1 || true
 
 # recreate cluster with requested DataNode count
-${COMPOSE_CMD} down --remove-orphans >/dev/null 2>&1 || true
+${COMPOSE_CMD} ${COMPOSE_FILES} down --remove-orphans >/dev/null 2>&1 || true
 if [ "${START_HIVE}" = "1" ]; then
-  ${COMPOSE_CMD} up -d --scale datanode="${DN_COUNT}"
+  ${COMPOSE_CMD} ${COMPOSE_FILES} up -d
 else
-  ${COMPOSE_CMD} up -d --scale datanode="${DN_COUNT}" \
+  ${COMPOSE_CMD} ${COMPOSE_FILES} up -d \
     --scale hive-metastore-postgresql=0 \
     --scale hive-metastore=0 \
     --scale hive-server=0
@@ -153,19 +178,24 @@ fi
 
 echo "Waiting for NameNode to be ready..."
 for i in $(seq 1 30); do
-  if ${COMPOSE_CMD} exec -T namenode /opt/hadoop-3.2.1/bin/hdfs dfsadmin -report >/dev/null 2>&1; then
+  if ${COMPOSE_CMD} exec -T namenode bash -c \
+       'timeout 5 /opt/hadoop-3.2.1/bin/hdfs dfsadmin -report' >/dev/null 2>&1; then
     break
   fi
+  [ "$i" -eq 30 ] && { echo "ERROR: NameNode did not become ready in time."; exit 1; }
   sleep 2
 done
 
 echo "Waiting for ${DN_COUNT} DataNode(s) to register..."
 for i in $(seq 1 60); do
-  LIVE_DNS=$(${COMPOSE_CMD} exec -T namenode /opt/hadoop-3.2.1/bin/hdfs dfsadmin -report 2>/dev/null \
+  LIVE_DNS=$(${COMPOSE_CMD} exec -T namenode bash -c \
+    'timeout 5 /opt/hadoop-3.2.1/bin/hdfs dfsadmin -report 2>/dev/null' \
     | grep -c "^Name:" || true)
+  echo "  ${LIVE_DNS}/${DN_COUNT} DataNodes live..."
   if [ "${LIVE_DNS}" -ge "${DN_COUNT}" ]; then
     break
   fi
+  [ "$i" -eq 60 ] && { echo "ERROR: Only ${LIVE_DNS}/${DN_COUNT} DataNodes registered after 2 minutes."; exit 1; }
   sleep 2
 done
 

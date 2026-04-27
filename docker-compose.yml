@@ -20,21 +20,6 @@ services:
       - bash
       - /shared/compose-namenode.sh
 
-  datanode:
-    image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
-    depends_on:
-      - namenode
-    env_file:
-      - ./hadoop.env
-    environment:
-      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
-    volumes:
-      - ./shared:/shared
-      - /tmp/hadoop-root
-    command:
-      - bash
-      - /shared/compose-datanode.sh
-
   hive-metastore-postgresql:
     image: bde2020/hive-metastore-postgresql:2.3.0
     container_name: hive-metastore-postgresql
@@ -77,7 +62,6 @@ services:
     hostname: hive-server
     depends_on:
       - namenode
-      - datanode
       - hive-metastore
     env_file:
       - ./hadoop.env

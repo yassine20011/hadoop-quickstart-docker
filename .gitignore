@@ -1,6 +1,9 @@
 # HDFS persistent state
 data/
 
+# Generated at runtime by run.sh
+docker-compose.datanodes.yml
+
 # Bash history
 history/
 
