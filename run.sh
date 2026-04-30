@@ -171,7 +171,7 @@ if [ "${START_HIVE}" = "1" ]; then
   ${COMPOSE_CMD} ${COMPOSE_FILES} up -d
 else
   ${COMPOSE_CMD} ${COMPOSE_FILES} up -d \
-    --scale hive-metastore-postgresql=0 \
+    --scale postgres=0 \
     --scale hive-metastore=0 \
     --scale hive-server=0
 fi

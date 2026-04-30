@@ -20,10 +20,10 @@ services:
       - bash
       - /shared/compose-namenode.sh
 
-  hive-metastore-postgresql:
+  postgres:
     image: bde2020/hive-metastore-postgresql:2.3.0
-    container_name: hive-metastore-postgresql
-    hostname: hive-metastore-postgresql
+    container_name: postgres
+    hostname: postgres
     environment:
       POSTGRES_DB: metastore
       POSTGRES_USER: hive
@@ -37,17 +37,17 @@ services:
     hostname: hive-metastore
     depends_on:
       - namenode
-      - hive-metastore-postgresql
+      - postgres
     env_file:
       - ./hadoop.env
     environment:
       CORE_CONF_fs_defaultFS: hdfs://namenode:8020
       HIVE_SITE_CONF_hive_metastore_uris: thrift://hive-metastore:9083
-      HIVE_SITE_CONF_javax_jdo_option_ConnectionURL: jdbc:postgresql://hive-metastore-postgresql:5432/metastore
+      HIVE_SITE_CONF_javax_jdo_option_ConnectionURL: jdbc:postgresql://postgres:5432/metastore
       HIVE_SITE_CONF_javax_jdo_option_ConnectionDriverName: org.postgresql.Driver
       HIVE_SITE_CONF_javax_jdo_option_ConnectionUserName: hive
       HIVE_SITE_CONF_javax_jdo_option_ConnectionPassword: hive
-      SERVICE_PRECONDITION: namenode:9870 hive-metastore-postgresql:5432
+      SERVICE_PRECONDITION: namenode:9870 postgres:5432
     volumes:
       - ./shared:/shared
     command:
@@ -68,7 +68,7 @@ services:
     environment:
       CORE_CONF_fs_defaultFS: hdfs://namenode:8020
       HIVE_SITE_CONF_hive_metastore_uris: thrift://hive-metastore:9083
-      HIVE_SITE_CONF_javax_jdo_option_ConnectionURL: jdbc:postgresql://hive-metastore-postgresql:5432/metastore
+      HIVE_SITE_CONF_javax_jdo_option_ConnectionURL: jdbc:postgresql://postgres:5432/metastore
       HIVE_SITE_CONF_javax_jdo_option_ConnectionDriverName: org.postgresql.Driver
       HIVE_SITE_CONF_javax_jdo_option_ConnectionUserName: hive
       HIVE_SITE_CONF_javax_jdo_option_ConnectionPassword: hive
