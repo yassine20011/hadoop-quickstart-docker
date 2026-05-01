@@ -34,12 +34,10 @@ services:
       - hadoop
     environment:
       POSTGRES_DB: hive
-      POSTGRES_USER: hive
-      POSTGRES_PASSWORD: hive
     volumes:
       - ./data/hive/postgresql:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hive -d hive || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hive || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 30
