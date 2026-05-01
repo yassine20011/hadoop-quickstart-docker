@@ -1,8 +1,14 @@
+networks:
+  hadoop:
+    driver: bridge
+
 services:
   namenode:
     image: bde2020/hadoop-base:2.0.0-hadoop3.2.1-java8
     container_name: hadoop-namenode
     hostname: namenode
+    networks:
+      - hadoop
     env_file:
       - ./hadoop.env
     ports:
@@ -24,20 +30,32 @@ services:
     image: bde2020/hive-metastore-postgresql:2.3.0
     container_name: postgres
     hostname: postgres
+    networks:
+      - hadoop
     environment:
       POSTGRES_DB: metastore
       POSTGRES_USER: hive
       POSTGRES_PASSWORD: hive
     volumes:
       - ./data/hive/postgresql:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive -d metastore || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
 
   hive-metastore:
     image: bde2020/hive:2.3.2-postgresql-metastore
     container_name: hive-metastore
     hostname: hive-metastore
+    networks:
+      - hadoop
     depends_on:
-      - namenode
-      - postgres
+      namenode:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     env_file:
       - ./hadoop.env
     environment:
@@ -60,9 +78,13 @@ services:
     image: bde2020/hive:2.3.2-postgresql-metastore
     container_name: hive-server
     hostname: hive-server
+    networks:
+      - hadoop
     depends_on:
-      - namenode
-      - hive-metastore
+      namenode:
+        condition: service_started
+      hive-metastore:
+        condition: service_started
     env_file:
       - ./hadoop.env
     environment:
