@@ -27,6 +27,18 @@ chmod +x shared/start-hive-metastore.sh
 chmod +x shared/compose-namenode.sh
 chmod +x shared/compose-datanode.sh
 
+# Optional: install Pig into shared/
+read -r -p "Install Apache Pig 0.17.0 for scripting? [y/N]: " pig_answer
+if [[ "${pig_answer}" =~ ^[Yy]$ ]]; then
+	if [ -d "shared/pig-0.17.0" ]; then
+		echo "Pig already installed in shared/, skipping."
+	else
+		echo "Downloading and extracting Apache Pig 0.17.0..."
+		curl -L https://downloads.apache.org/pig/pig-0.17.0/pig-0.17.0.tar.gz | tar -xz -C shared/
+		echo "✅ Pig ready at shared/pig-0.17.0"
+	fi
+fi
+
 echo ""
 echo "✅ Setup complete! Directory structure:"
 echo ""

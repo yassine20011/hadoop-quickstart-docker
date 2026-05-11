@@ -20,21 +20,17 @@ if [ -z "${HDFS_BIN}" ]; then
 	fi
 fi
 
-# Install Pig if not already present
-PIG_HOME="/opt/pig-0.17.0"
-if [ ! -d "${PIG_HOME}" ]; then
-	echo "Installing Apache Pig..."
-	curl -sL https://downloads.apache.org/pig/pig-0.17.0/pig-0.17.0.tar.gz -o /tmp/pig-0.17.0.tar.gz
-	tar -xzf /tmp/pig-0.17.0.tar.gz -C /opt
-	rm /tmp/pig-0.17.0.tar.gz
+# Configure Pig if installed via setup.sh
+if [ -d "/shared/pig-0.17.0" ]; then
+	export PIG_HOME="/shared/pig-0.17.0"
+	export PIG_CLASSPATH="${HADOOP_CONF_DIR:-${HADOOP_HOME}/etc/hadoop}"
+	export PATH="${PIG_HOME}/bin:${PATH}"
+	grep -q "PIG_HOME" /root/.bashrc 2>/dev/null || cat >> /root/.bashrc <<'EOF'
+export PIG_HOME=/shared/pig-0.17.0
+export PIG_CLASSPATH=/opt/hadoop-3.2.1/etc/hadoop
+export PATH=${PIG_HOME}/bin:${PATH}
+EOF
 fi
-export PIG_HOME="${PIG_HOME}"
-export PATH="${PIG_HOME}/bin:${PATH}"
-export PIG_CLASSPATH="${HADOOP_CONF_DIR:-${HADOOP_HOME}/etc/hadoop}"
-# persist for interactive shells
-echo "export PIG_HOME=${PIG_HOME}" > /etc/profile.d/pig.sh
-echo "export PATH=\${PIG_HOME}/bin:\${PATH}" >> /etc/profile.d/pig.sh
-echo "export PIG_CLASSPATH=${HADOOP_CONF_DIR:-${HADOOP_HOME}/etc/hadoop}" >> /etc/profile.d/pig.sh
 
 echo "Starting Hadoop..."
 echo "Using hdfs binary: ${HDFS_BIN}"

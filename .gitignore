@@ -13,3 +13,6 @@ shared/*.txt
 shared/*.json
 shared/*.xml
 shared/*.parquet
+
+# Pig binary (installed via setup.sh)
+shared/pig-0.17.0/
