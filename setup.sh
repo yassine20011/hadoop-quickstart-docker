@@ -7,6 +7,7 @@ echo "Setting up Hadoop Docker Dev environment..."
 # Create directory structure
 mkdir -p data/nn
 mkdir -p data/hive/postgresql
+mkdir -p data/hbase
 mkdir -p history
 mkdir -p shared
 
@@ -18,9 +19,11 @@ chmod 777 data/nn
 if ! chmod 777 data/hive/postgresql 2>/dev/null; then
 	echo "WARN: could not chmod data/hive/postgresql (likely owned by a container UID); continuing."
 fi
+chmod 777 data/hbase 2>/dev/null || true
 
 # Make scripts executable
 chmod +x run.sh
+chmod +x stop.sh
 chmod +x shared/start-hadoop.sh
 chmod +x shared/start-datanode.sh
 chmod +x shared/start-hive-metastore.sh
