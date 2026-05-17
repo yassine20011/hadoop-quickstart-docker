@@ -37,18 +37,24 @@ A lightweight, Docker-based Hadoop development environment. No 10GB VMs, no Virt
 ./run.sh
 ```
 
-`run.sh` prompts for how many DataNodes to start (default: `2`) and whether to start Hive.
-
-Example:
+`run.sh` shows an arrow-key preset menu, then asks how many DataNodes to start (default: `2`).
 
 ```text
-How many DataNodes do you want? [2]: 2
-Start Hive (metastore + HiveServer2)? [y/N]: y
+  Select a preset:
+> minimal  — Hadoop only (~1.5 GB)
+  standard — Hadoop + Hive (~2.5 GB)
+  full     — Hadoop + Hive + HBase (~3.5 GB)
+  custom   — pick components
 ```
 
-If you answer `N` (or just press Enter), only the Hadoop core services start — no Hive containers, faster startup.
+| Preset | Services | ~RAM |
+| --- | --- | --- |
+| minimal | Hadoop (NameNode + DataNodes) | ~1.5 GB |
+| standard | + Hive metastore + HiveServer2 | ~2.5 GB |
+| full | + HBase Master + RegionServer | ~3.5 GB |
+| custom | your choice | varies |
 
-That's it — you'll land in an interactive shell inside the NameNode container with Hadoop fully running.
+Use arrow keys to select, Enter to confirm. You'll land in an interactive shell inside the NameNode container with Hadoop fully running.
 
 ---
 
@@ -68,7 +74,8 @@ That's it — you'll land in an interactive shell inside the NameNode container 
 │   └── (your data files)   # Drop files here to access them in the container
 └── data/
   ├── nn/                   # NameNode persistent state
-  └── hive/                 # Hive metastore PostgreSQL persistent state
+  ├── hive/                 # Hive metastore PostgreSQL persistent state
+  └── hbase/                # HBase data directory
 ```
 
 > `shared/` is your bridge: anything you place here is instantly available inside the container at `/shared`.
@@ -123,6 +130,7 @@ Once the container is running, open these in your browser:
 | YARN Resource Manager | <http://localhost:8088> |
 | Job History Server | <http://localhost:19888> |
 | HiveServer2 (JDBC/Beeline) | `localhost:10000` |
+| HBase Master | <http://localhost:16010> |
 
 ---
 
@@ -131,6 +139,8 @@ Once the container is running, open these in your browser:
 ```bash
 # reconnect to NameNode container
 docker compose exec namenode bash
+# or by container name
+docker exec -it hadoop-namenode bash
 
 # connect to HiveServer2 via Beeline (from host)
 docker exec -it hive-server beeline -u jdbc:hive2://localhost:10000
@@ -150,7 +160,11 @@ docker compose down --remove-orphans
 # start without attaching shell (CI / scripts)
 NO_ATTACH=1 ./run.sh
 
-# start with Hive enabled non-interactively (CI / scripts)
+# start with a specific preset non-interactively (CI / scripts)
+PRESET=standard NO_ATTACH=1 ./run.sh
+PRESET=full NO_ATTACH=1 ./run.sh
+
+# legacy: start with Hive enabled (still works, maps to standard preset)
 START_HIVE=y NO_ATTACH=1 ./run.sh
 ```
 
@@ -197,6 +211,7 @@ hdfs dfs -cat /user/root/output/part-r-00000
 | Hadoop | 3.2.1 |
 | Java | 8 |
 | Base Image | [bde2020/hadoop-base](https://hub.docker.com/r/bde2020/hadoop-base) |
+| HBase | 1.2.6 |
 
 ---
 
@@ -216,15 +231,39 @@ The startup sequence is:
 
 Only after all 7 stages pass does `run.sh` print the cluster summary and drop you into the NameNode shell.
 
+When HBase is active (`full` or `custom` preset with HBase), an additional check waits for:
+
+8. HBase Master port **16010** accepting TCP connections
+9. RegionServer registered (Master UI reports 1 live server)
+
 ---
 
 ## Stopping the Environment
 
 ```bash
-docker compose down --remove-orphans
+./stop.sh
 ```
 
 Re-running `./run.sh` will start fresh automatically.
+
+---
+
+## Quick Test — HBase
+
+```bash
+# Open HBase shell
+docker exec -it hbase-master hbase shell
+
+# Inside HBase shell (one command per line):
+create 'test', 'cf'
+put 'test', 'row1', 'cf:name', 'hadoop'
+put 'test', 'row2', 'cf:name', 'hbase'
+scan 'test'
+exit
+
+# Verify HBase is writing to your HDFS (run from inside hadoop-namenode):
+hdfs dfs -ls /hbase/data/default/test
+```
 
 ---
 
