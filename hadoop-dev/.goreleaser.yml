@@ -58,3 +58,13 @@ changelog:
       - "^ci:"
       - Merge pull request
       - Merge branch
+
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - "sign-blob"
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
