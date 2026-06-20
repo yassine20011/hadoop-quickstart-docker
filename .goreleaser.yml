@@ -43,9 +43,6 @@ checksum:
   name_template: "checksums.txt"
 
 release:
-  github:
-    owner: hadoop-quickstart
-    name: hadoop-dev
   draft: true
   prerelease: auto
   name_template: "v{{.Version}}"
