@@ -31,12 +31,14 @@ builds:
 archives:
   - id: default
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        format: zip
+    formats:
+      - tar.gz
+      - zip
     files:
-      - README.md
-      - LICENSE
+      - src: "../README.md"
+        dst: "README.md"
+      - src: "../LICENSE"
+        dst: "LICENSE"
 
 checksum:
   name_template: "checksums.txt"
