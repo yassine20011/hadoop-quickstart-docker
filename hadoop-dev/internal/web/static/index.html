@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hadoop-dev — Cluster Dashboard</title>
+  <meta name="description" content="Local Hadoop development cluster manager dashboard">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@2.0.3/dist/htmx.min.js" defer></script>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── Header ────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">🐘 hadoop-dev</div>
+
+    <div class="controls">
+
+      <!-- Preset selector -->
+      <div class="preset-group" id="preset-group">
+        <button class="preset-btn active" data-preset="minimal"  onclick="setPreset(this)">Minimal</button>
+        <button class="preset-btn"        data-preset="standard" onclick="setPreset(this)">Standard</button>
+        <button class="preset-btn"        data-preset="full"     onclick="setPreset(this)">Full</button>
+        <input type="hidden" id="preset-val" name="preset" value="minimal">
+      </div>
+
+      <!-- DataNode slider -->
+      <div class="dn-control">
+        <span>DataNodes</span>
+        <input type="range" id="dn-count" name="datanodes" min="1" max="6" value="2"
+               oninput="document.getElementById('dn-label').textContent = this.value">
+        <span id="dn-label">2</span>
+      </div>
+
+      <!-- Start -->
+      <button class="btn btn-start"
+              hx-post="/api/start"
+              hx-target="#toast-area"
+              hx-swap="innerHTML"
+              hx-include="#preset-val, #dn-count"
+              hx-indicator="#start-spinner">
+        <span id="start-spinner" class="htmx-indicator spinner"></span>
+        ▶ Start
+      </button>
+
+      <!-- Stop -->
+      <button class="btn btn-stop"
+              hx-post="/api/stop"
+              hx-target="#toast-area"
+              hx-swap="innerHTML">
+        ■ Stop
+      </button>
+
+    </div>
+  </header>
+
+  <!-- Toast / feedback area -->
+  <div id="toast-area"></div>
+
+  <!-- ── Container Status Grid ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Cluster Status</h2>
+      <span class="txt2" style="font-size:0.75rem">auto-refresh every 4s</span>
+    </div>
+    <div id="status-grid"
+         class="container-grid"
+         hx-get="/api/status/cards"
+         hx-trigger="load, every 4s"
+         hx-swap="innerHTML">
+      <div class="no-containers">Checking cluster status…</div>
+    </div>
+  </div>
+
+  <!-- ── Bottom Panel: Logs + Files ────────────────────────────────────── -->
+  <div class="bottom-panel">
+
+    <!-- Log Viewer -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Logs</h2>
+        <select id="log-service" onchange="connectLogs(this.value)">
+          <option value="hadoop-namenode">namenode</option>
+          <option value="hive-server">hive-server</option>
+          <option value="hive-metastore">hive-metastore</option>
+          <option value="hbase-master">hbase-master</option>
+          <option value="postgres">postgres</option>
+        </select>
+      </div>
+      <div id="log-output" class="log-terminal">
+        <span style="color:var(--txt3)">Select a service to stream logs…</span>
+      </div>
+    </div>
+
+    <!-- File Manager -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Shared Files</h2>
+        <button class="btn-log" onclick="document.getElementById('file-input').click()">+ Add</button>
+      </div>
+      <form id="upload-form"
+            hx-post="/api/files/upload"
+            hx-encoding="multipart/form-data"
+            hx-target="#file-list"
+            hx-swap="innerHTML">
+        <div class="drop-zone"
+             id="drop-zone"
+             ondragover="event.preventDefault(); this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="handleDrop(event)">
+          <span class="drop-icon">📂</span>
+          <p>Drop files here or click to browse</p>
+          <input type="file" name="file" id="file-input" multiple
+                 onchange="document.getElementById('upload-form').dispatchEvent(new Event('submit'))">
+        </div>
+      </form>
+      <div id="file-list" class="file-list"
+           hx-get="/api/files" hx-trigger="load, every 6s" hx-swap="innerHTML"></div>
+      <div style="padding: 0 12px 12px"><div id="hdfs-status"></div></div>
+    </div>
+
+  </div>
+
+  <!-- ── Startup Progress Timeline ─────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Startup Progress</h2>
+      <button class="btn-log" onclick="document.getElementById('progress-list').innerHTML=''">Clear</button>
+    </div>
+    <div class="panel" style="padding:16px">
+      <div id="progress-list" class="progress-list">
+        <p style="color:var(--txt3);font-size:0.8rem">Progress events will appear here when you start the cluster.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── hadoop.env Config Editor ──────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Hadoop Config (hadoop.env)</h2>
+      <button class="btn-log"
+              hx-get="/api/config"
+              hx-target="#config-editor"
+              hx-swap="innerHTML">↻ Reload</button>
+    </div>
+    <div class="panel" style="padding:16px">
+      <div id="config-editor"
+           hx-get="/api/config"
+           hx-trigger="load"
+           hx-swap="innerHTML">
+        <p style="color:var(--txt3);font-size:0.8rem">Loading config…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Quick Links ───────────────────────────────────────────────────── -->
+  <div class="section">
+    <h2 style="margin-bottom:12px">Hadoop Ecosystem</h2>
+    <div class="quick-links">
+      <a href="http://localhost:9870" target="_blank" class="link-card">
+        <span class="icon">🗂</span>
+        <span>NameNode HDFS</span>
+        <span class="port">:9870</span>
+      </a>
+      <a href="http://localhost:8088" target="_blank" class="link-card">
+        <span class="icon">⚙️</span>
+        <span>YARN ResourceManager</span>
+        <span class="port">:8088</span>
+      </a>
+      <a href="http://localhost:19888" target="_blank" class="link-card">
+        <span class="icon">📜</span>
+        <span>JobHistory Server</span>
+        <span class="port">:19888</span>
+      </a>
+      <a href="http://localhost:16010" target="_blank" class="link-card">
+        <span class="icon">🗄</span>
+        <span>HBase Master</span>
+        <span class="port">:16010</span>
+      </a>
+      <a href="http://localhost:10002" target="_blank" class="link-card">
+        <span class="icon">🐝</span>
+        <span>HiveServer2 Web UI</span>
+        <span class="port">:10002</span>
+      </a>
+    </div>
+  </div>
+
+</div><!-- /.shell -->
+
+<script>
+  // ── Preset selector ───────────────────────────────────────────────────
+  function setPreset(btn) {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('preset-val').value = btn.dataset.preset;
+  }
+
+  // ── SSE log streaming ────────────────────────────────────────────────
+  let logSource = null;
+
+  function connectLogs(service) {
+    if (logSource) { logSource.close(); logSource = null; }
+
+    const out = document.getElementById('log-output');
+    out.innerHTML = `<span style="color:var(--txt3)">Connecting to ${service}…</span>`;
+
+    logSource = new EventSource('/api/logs/' + service);
+
+    logSource.onmessage = (e) => {
+      // Remove placeholder on first real message
+      if (out.querySelector('span')) out.innerHTML = '';
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.textContent = e.data;
+      out.appendChild(line);
+      // Auto-scroll
+      out.scrollTop = out.scrollHeight;
+      // Keep only last 500 lines
+      while (out.children.length > 500) out.removeChild(out.firstChild);
+    };
+
+    logSource.onerror = () => {
+      const line = document.createElement('div');
+      line.style.color = 'var(--red)';
+      line.textContent = '⚠ Connection lost. Is the container running?';
+      out.appendChild(line);
+      logSource.close();
+    };
+  }
+
+  // Start streaming namenode on load after a small delay
+  setTimeout(() => connectLogs('hadoop-namenode'), 800);
+
+  // Re-connect when service dropdown changes
+  document.getElementById('log-service').addEventListener('change', e => connectLogs(e.target.value));
+
+  // ── Drag & drop file upload ───────────────────────────────────────────
+  function handleDrop(event) {
+    event.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    const files = event.dataTransfer.files;
+    if (!files.length) return;
+
+    const form = document.getElementById('upload-form');
+    const dt   = new DataTransfer();
+    for (const f of files) dt.items.add(f);
+    document.getElementById('file-input').files = dt.files;
+    htmx.trigger(form, 'submit');
+  }
+
+  // ── Clear toast after 4s ─────────────────────────────────────────────
+  document.body.addEventListener('htmx:afterSwap', (e) => {
+    if (e.target.id === 'toast-area') {
+      setTimeout(() => { e.target.innerHTML = ''; }, 4000);
+      // Connect progress SSE when start fires
+      if (e.target.innerHTML.includes('Starting')) connectProgress();
+    }
+  });
+
+  // ── Startup progress SSE ─────────────────────────────────────────────
+  let progressSource = null;
+
+  const kindIcon = { step: '⏳', ok: '✅', warn: '⚠️', error: '❌', done: '🎉' };
+
+  function connectProgress() {
+    if (progressSource) progressSource.close();
+    const list = document.getElementById('progress-list');
+    list.innerHTML = '';
+
+    progressSource = new EventSource('/api/start/progress');
+    progressSource.onmessage = (e) => {
+      const ev = JSON.parse(e.data);
+      const row = document.createElement('div');
+      row.className = 'progress-row progress-' + ev.kind;
+      row.innerHTML = `<span class="progress-icon">${kindIcon[ev.kind] || '•'}</span><span>${ev.msg}</span>`;
+      list.appendChild(row);
+      list.scrollTop = list.scrollHeight;
+      if (ev.kind === 'done' || ev.kind === 'error') {
+        progressSource.close();
+        progressSource = null;
+      }
+    };
+    progressSource.onerror = () => {
+      progressSource.close();
+      progressSource = null;
+    };
+  }
+</script>
+</body>
+</html>
