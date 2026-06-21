@@ -1,0 +1,6 @@
+# Binaries
+hadoop-dev
+hadoop-dev.exe
+
+# GoReleaser build artifacts
+dist/
