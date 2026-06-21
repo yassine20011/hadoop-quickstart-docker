@@ -87,16 +87,23 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("HX-Trigger", "refresh-status")
 	fmt.Fprintf(w, `<div class="toast toast-info">⬀ Starting %s cluster (%d DataNodes)&hellip;<br><small>Watch the <strong>Startup Progress</strong> panel below.</small></div>`, preset, dnCount)
 }
 
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.starting = false
+	s.lastErr = ""
+	s.mu.Unlock()
+
 	if err := s.mgr.Stop(r.Context()); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	s.publishProgress(ProgressEvent{Kind: "warn", Msg: "Cluster stopped by user"})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("HX-Trigger", "refresh-status")
 	fmt.Fprint(w, `<div class="toast toast-stop">🛑 Cluster stopped.</div>`)
 }
 
@@ -186,6 +193,7 @@ func (s *Server) handleStatusCards(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 
 	var summaries []containerSummary
+	anyActive := false
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
 		summaries = append(summaries, containerSummary{
@@ -194,7 +202,12 @@ func (s *Server) handleStatusCards(w http.ResponseWriter, r *http.Request) {
 			Status: c.Status,
 			Image:  c.Image,
 		})
+		if c.State == "running" || c.State == "restarting" || c.State == "created" {
+			anyActive = true
+		}
 	}
+
+	clusterActive := starting || anyActive
 
 	funcMap := template.FuncMap{
 		"stateLabel": func(state string) string {
@@ -227,6 +240,31 @@ func (s *Server) handleStatusCards(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = tmpl.Execute(w, summaries)
+
+	if clusterActive {
+		fmt.Fprint(w, `
+<div id="cluster-buttons" hx-swap-oob="true" style="display: flex; gap: 8px;">
+      <button class="btn btn-stop"
+              hx-post="/api/stop"
+              hx-target="#toast-area"
+              hx-swap="innerHTML">
+        ■ Stop
+      </button>
+</div>`)
+	} else {
+		fmt.Fprint(w, `
+<div id="cluster-buttons" hx-swap-oob="true" style="display: flex; gap: 8px;">
+      <button class="btn btn-start"
+              hx-post="/api/start"
+              hx-target="#toast-area"
+              hx-swap="innerHTML"
+              hx-include="#preset-val, #dn-count"
+              hx-indicator="#start-spinner">
+        <span id="start-spinner" class="htmx-indicator spinner"></span>
+        ▶ Start
+      </button>
+</div>`)
+	}
 }
 
 // ─── Log SSE Stream ───────────────────────────────────────────────────────

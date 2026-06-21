@@ -33,24 +33,18 @@
         <span id="dn-label">2</span>
       </div>
 
-      <!-- Start -->
-      <button class="btn btn-start"
-              hx-post="/api/start"
-              hx-target="#toast-area"
-              hx-swap="innerHTML"
-              hx-include="#preset-val, #dn-count"
-              hx-indicator="#start-spinner">
-        <span id="start-spinner" class="htmx-indicator spinner"></span>
-        ▶ Start
-      </button>
-
-      <!-- Stop -->
-      <button class="btn btn-stop"
-              hx-post="/api/stop"
-              hx-target="#toast-area"
-              hx-swap="innerHTML">
-        ■ Stop
-      </button>
+      <!-- Start/Stop Controls -->
+      <div id="cluster-buttons" style="display: flex; gap: 8px;">
+        <button class="btn btn-start"
+                hx-post="/api/start"
+                hx-target="#toast-area"
+                hx-swap="innerHTML"
+                hx-include="#preset-val, #dn-count"
+                hx-indicator="#start-spinner">
+          <span id="start-spinner" class="htmx-indicator spinner"></span>
+          ▶ Start
+        </button>
+      </div>
 
     </div>
   </header>
@@ -67,7 +61,7 @@
     <div id="status-grid"
          class="container-grid"
          hx-get="/api/status/cards"
-         hx-trigger="load, every 4s"
+         hx-trigger="load, every 4s, refresh-status from:body"
          hx-swap="innerHTML">
       <div class="no-containers">Checking cluster status…</div>
     </div>

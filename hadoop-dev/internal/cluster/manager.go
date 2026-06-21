@@ -14,6 +14,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
@@ -296,6 +297,19 @@ func (m *Manager) ensureVolume(ctx context.Context, name string) error {
 }
 
 func (m *Manager) runContainer(ctx context.Context, spec ServiceSpec) error {
+	imageName := spec.ContainerCfg.Image
+	_, _, err := m.cli.ImageInspectWithRaw(ctx, imageName)
+	if err != nil {
+		m.step(fmt.Sprintf("Image %s not found locally. Pulling image...", imageName))
+		reader, err := m.cli.ImagePull(ctx, imageName, image.PullOptions{})
+		if err != nil {
+			return fmt.Errorf("pull image %s: %w", imageName, err)
+		}
+		defer reader.Close()
+		_, _ = io.Copy(io.Discard, reader)
+		m.ok(fmt.Sprintf("Image %s pulled successfully", imageName))
+	}
+
 	created, err := m.cli.ContainerCreate(ctx,
 		spec.ContainerCfg,
 		spec.HostCfg,
@@ -379,7 +393,7 @@ func ensureFile(path string) error {
 
 // ListContainers returns all hadoop-related containers (running or stopped).
 func (m *Manager) ListContainers(ctx context.Context) ([]container.Summary, error) {
-	return m.cli.ContainerList(ctx, container.ListOptions{
+	containers, err := m.cli.ContainerList(ctx, container.ListOptions{
 		All: true,
 		Filters: filters.NewArgs(
 			filters.Arg("name", "hadoop-"),
@@ -388,6 +402,27 @@ func (m *Manager) ListContainers(ctx context.Context) ([]container.Summary, erro
 			filters.Arg("name", "postgres"),
 		),
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []container.Summary
+	for _, c := range containers {
+		if len(c.Names) == 0 {
+			continue
+		}
+		name := strings.TrimPrefix(c.Names[0], "/")
+		if name == "hadoop-namenode" ||
+			name == "postgres" ||
+			name == "hive-metastore" ||
+			name == "hive-server" ||
+			name == "hbase-master" ||
+			name == "hbase-regionserver" ||
+			strings.HasPrefix(name, "hadoop-datanode-") {
+			filtered = append(filtered, c)
+		}
+	}
+	return filtered, nil
 }
 
 // LogStream opens a read-closer for the container's stdout+stderr log stream.
