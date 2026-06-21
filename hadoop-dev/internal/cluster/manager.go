@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"hadoop-dev/internal/config"
+	"hadoop-dev/internal/scripts"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -66,8 +67,8 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("resolve work-dir: %w", err)
 	}
 
-	// Ensure shared/ and history/ directories exist (cross-platform setup)
-	if err := ensureDir(filepath.Join(workDir, "shared")); err != nil {
+	// Extract essential scripts to the shared directory
+	if err := scripts.ExtractTo(workDir); err != nil {
 		return err
 	}
 	historyDir := filepath.Join(workDir, "history")
