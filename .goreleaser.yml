@@ -25,16 +25,17 @@ builds:
         goarch: arm64
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
-      - -X main.date={{.Date}}
+      - -X hadoop-dev/cmd.Version={{.Version}}
+      - -X hadoop-dev/cmd.Commit={{.Commit}}
+      - -X hadoop-dev/cmd.Date={{.Date}}
 
 archives:
   - id: default
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    formats:
-      - tar.gz
-      - zip
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
     files:
       - README.md
       - LICENSE
@@ -42,10 +43,17 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+extra_files:
+  - glob: "install.sh"
+  - glob: "install.ps1"
+
 release:
   draft: true
   prerelease: auto
   name_template: "v{{.Version}}"
+  extra_files:
+    - glob: "install.sh"
+    - glob: "install.ps1"
 
 changelog:
   sort: asc

@@ -1,35 +1,35 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os/signal"
-	"syscall"
 
 	"hadoop-dev/internal/web"
 
 	"github.com/spf13/cobra"
 )
 
-var webPort int
+type webOptions struct {
+	port int
+}
+
+var webOpts webOptions
 
 var webCmd = &cobra.Command{
-	Use:   "web",
+	Use:   "web [flags]",
 	Short: "Launch the interactive web dashboard",
 	Long:  `Starts a local web server and opens the Hadoop cluster dashboard in your browser.`,
+	Example: `  hadoop-dev web
+  hadoop-dev web --port 9090`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		defer stop()
-
-		srv, err := web.NewServer(workDir, webPort)
+		srv, err := web.NewServer(workDir, webOpts.port)
 		if err != nil {
 			return fmt.Errorf("init server: %w", err)
 		}
-		return srv.Run(ctx)
+		return srv.Run(cmd.Context())
 	},
 }
 
 func init() {
-	webCmd.Flags().IntVar(&webPort, "port", 8080, "port for the web dashboard")
+	webCmd.Flags().IntVar(&webOpts.port, "port", 8080, "port for the web dashboard")
 	rootCmd.AddCommand(webCmd)
 }

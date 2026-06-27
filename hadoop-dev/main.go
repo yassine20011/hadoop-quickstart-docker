@@ -1,7 +1,15 @@
 package main
 
-import "hadoop-dev/cmd"
+import (
+	"fmt"
+	"os"
+
+	"hadoop-dev/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
+	}
 }

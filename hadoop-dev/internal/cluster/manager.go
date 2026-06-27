@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"hadoop-dev/internal/config"
+	"hadoop-dev/internal/output"
 	"hadoop-dev/internal/scripts"
 
 	"github.com/docker/docker/api/types/container"
@@ -25,7 +25,8 @@ import (
 // Manager is the main orchestrator. It holds an authenticated Docker client.
 type Manager struct {
 	cli    *client.Client
-	emitFn func(kind, msg string) // nil = stdout only
+	emitFn func(kind, msg string)
+	pr     *output.Printer // nil when called from web server
 }
 
 // NewManager creates a Manager connected to the local Docker daemon.
@@ -39,28 +40,85 @@ func NewManager() (*Manager, error) {
 
 func (m *Manager) Close() { _ = m.cli.Close() }
 
+// WithPrinter returns a shallow copy of the Manager with a terminal printer set.
+func (m *Manager) WithPrinter(pr *output.Printer) *Manager {
+	return &Manager{cli: m.cli, emitFn: m.emitFn, pr: pr}
+}
+
 // WithEmitter returns a shallow copy of the Manager with a progress emitter set.
 // The emitter receives (kind, msg) where kind is "step", "ok", "warn", "error", or "done".
 func (m *Manager) WithEmitter(fn func(kind, msg string)) *Manager {
-	return &Manager{cli: m.cli, emitFn: fn}
+	return &Manager{cli: m.cli, emitFn: fn, pr: m.pr}
 }
 
-func (m *Manager) step(msg string) {
-	fmt.Printf("  ⏳ %s\n", msg)
-	if m.emitFn != nil { m.emitFn("step", msg) }
+// ColorStatus returns a color-coded status string for the `status` table.
+// Pass disableColor=true (from --no-color flag or NO_COLOR env) to get plain text.
+func ColorStatus(state, status string, disableColor bool) string {
+	if disableColor || os.Getenv("NO_COLOR") != "" {
+		return status
+	}
+	const (
+		green = "\033[32m"
+		yellow = "\033[33m"
+		red   = "\033[31m"
+		reset = "\033[0m"
+	)
+	switch state {
+	case "running":
+		return green + status + reset
+	case "restarting", "created":
+		return yellow + status + reset
+	default:
+		return red + status + reset
+	}
 }
-func (m *Manager) ok(msg string) {
-	fmt.Printf("  ✅ %s\n", msg)
-	if m.emitFn != nil { m.emitFn("ok", msg) }
+
+// ─── Internal output helpers ──────────────────────────────────────────────
+
+func (m *Manager) begin(label string) {
+	if m.pr != nil {
+		m.pr.Begin(label)
+	}
+	if m.emitFn != nil {
+		m.emitFn("step", label)
+	}
 }
+
+func (m *Manager) done(label, detail string) {
+	if m.pr != nil {
+		m.pr.Done(label, detail)
+	}
+	if m.emitFn != nil {
+		m.emitFn("ok", label)
+	}
+}
+
 func (m *Manager) warn(msg string) {
-	fmt.Printf("  ⚠️  %s\n", msg)
-	if m.emitFn != nil { m.emitFn("warn", msg) }
+	if m.pr != nil {
+		m.pr.Warn(msg)
+	}
+	if m.emitFn != nil {
+		m.emitFn("warn", msg)
+	}
+}
+
+func (m *Manager) progress(label, detail string) {
+	if m.pr != nil {
+		m.pr.Progress(label, detail)
+	}
+}
+
+func (m *Manager) sub(msg string) {
+	if m.pr != nil {
+		m.pr.Sub(msg)
+	}
 }
 
 // ─── Start ────────────────────────────────────────────────────────────────
 
 func (m *Manager) Start(ctx context.Context, cfg Config) error {
+	startedAt := time.Now()
+
 	// Resolve absolute work directory
 	workDir, err := filepath.Abs(cfg.WorkDir)
 	if err != nil {
@@ -88,11 +146,14 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 		hadoopEnv = nil
 	}
 
-	fmt.Printf("\n🐘 Starting Hadoop cluster [preset: %s, datanodes: %d]\n\n",
-		cfg.Preset, cfg.DNCount)
+	if m.pr != nil {
+		m.pr.Header(fmt.Sprintf("Starting Hadoop cluster (preset: %s, datanodes: %d)", cfg.Preset, cfg.DNCount))
+	}
 
 	// Stop any existing cluster first
-	_ = m.Stop(ctx)
+	m.begin("Cluster stopped")
+	_ = m.stopSilent(ctx)
+	m.done("Cluster stopped", "")
 
 	// Create Docker network
 	if err := m.ensureNetwork(ctx); err != nil {
@@ -107,20 +168,22 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 	}
 
 	// Start NameNode
-	m.step("Starting NameNode container...")
+	label := "Starting NameNode"
+	m.begin(label)
 	if err := m.runContainer(ctx, NameNodeSpec(workDir, hadoopEnv)); err != nil {
 		return fmt.Errorf("start NameNode: %w", err)
 	}
-	m.ok("NameNode container started")
+	m.done(label, "")
 
 	// Start DataNodes
 	for i := 1; i <= cfg.DNCount; i++ {
-		m.step(fmt.Sprintf("Starting DataNode %d...", i))
+		label := fmt.Sprintf("Starting DataNode %d", i)
+		m.begin(label)
 		spec := DataNodeSpec(i, workDir, hadoopEnv)
 		if err := m.runContainer(ctx, spec); err != nil {
 			return fmt.Errorf("start DataNode %d: %w", i, err)
 		}
-		m.ok(fmt.Sprintf("DataNode %d started", i))
+		m.done(label, "")
 	}
 
 	// Wait for NameNode
@@ -134,17 +197,17 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 	}
 
 	// Leave safe mode
-	m.step("Leaving HDFS safe mode...")
+	m.begin("Leaving HDFS safe mode")
 	leaveSafeMode(ctx, m)
-	m.ok("HDFS safe mode cleared")
+	m.done("Leaving HDFS safe mode", "")
 
 	// Hive services
 	if cfg.Preset.IncludesHive() {
-		m.step("Preparing HDFS directories for Hive...")
+		m.begin("Preparing HDFS directories for Hive")
 		_, _ = execInContainer(ctx, m.cli, ContainerNameNode, []string{"bash", "-lc",
 			"export HADOOP_HOME=/opt/hadoop-3.2.1 && export PATH=${HADOOP_HOME}/bin:${PATH} && " +
 				"hdfs dfs -mkdir -p /user/hive/warehouse && hdfs dfs -chmod 777 /user/hive/warehouse"})
-		m.ok("HDFS Hive warehouse ready")
+		m.done("Preparing HDFS directories for Hive", "")
 
 		if err := m.runContainer(ctx, PostgresSpec()); err != nil {
 			return fmt.Errorf("start Postgres: %w", err)
@@ -178,12 +241,18 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 	}
 
 	// Summary
+	if m.pr != nil {
+		m.pr.Elapsed(time.Since(startedAt))
+	}
 	m.printSummary(cfg)
-	if m.emitFn != nil { m.emitFn("done", "Cluster ready") }
+	if m.emitFn != nil {
+		m.emitFn("done", "Cluster ready")
+	}
 
 	// Optionally attach to NameNode interactive shell
 	if !cfg.NoAttach {
-		fmt.Println("\n🔌 Attaching to NameNode shell (Ctrl+D or 'exit' to leave)...")
+		m.sub("Attaching to NameNode shell (Ctrl+D or 'exit' to leave)...")
+		fmt.Fprintln(os.Stderr)
 		return m.attachShell(ctx)
 	}
 	return nil
@@ -191,59 +260,31 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 
 // ─── Stop ─────────────────────────────────────────────────────────────────
 
+// Stop tears down all cluster containers and the network.
+// It is silent — callers decide what to print.
 func (m *Manager) Stop(ctx context.Context) error {
-	// Remove all known containers (generous list, errors suppressed)
-	allNames := AllContainerNames(10) // up to 10 DataNodes
-	removed := 0
+	return m.stopSilent(ctx)
+}
+
+func (m *Manager) stopSilent(ctx context.Context) error {
+	allNames := AllContainerNames(10)
 	for _, name := range allNames {
 		_ = m.cli.ContainerRemove(ctx, name, container.RemoveOptions{Force: true})
-		removed++
 	}
-	// Remove the network
 	_ = m.cli.NetworkRemove(ctx, NetworkName)
-
-	if removed > 0 {
-		fmt.Println("🛑 Cluster stopped.")
-	}
 	return nil
 }
 
 // ─── Status ───────────────────────────────────────────────────────────────
 
 func (m *Manager) Status(ctx context.Context) error {
-	containers, err := m.cli.ContainerList(ctx, container.ListOptions{
-		All:     true,
-		Filters: filters.NewArgs(filters.Arg("name", "hadoop-"), filters.Arg("name", "hive-"), filters.Arg("name", "hbase-"), filters.Arg("name", "postgres")),
-	})
-	if err != nil {
-		return err
-	}
-
-	if len(containers) == 0 {
-		fmt.Println("No cluster containers found. Run 'hadoop-dev start' to begin.")
-		return nil
-	}
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "CONTAINER\tSTATUS\tIMAGE")
-	fmt.Fprintln(w, "---------\t------\t-----")
-	for _, c := range containers {
-		name := strings.TrimPrefix(c.Names[0], "/")
-		statusIcon := "🔴"
-		if c.State == "running" {
-			statusIcon = "🟢"
-		} else if c.State == "restarting" || c.State == "created" {
-			statusIcon = "🟡"
-		}
-		fmt.Fprintf(w, "%s\t%s %s\t%s\n", name, statusIcon, c.Status, c.Image)
-	}
-	return w.Flush()
+	_, err := m.ListContainers(ctx)
+	return err
 }
 
 // ─── Logs ─────────────────────────────────────────────────────────────────
 
 func (m *Manager) Logs(ctx context.Context, service string, follow bool) error {
-	// Map friendly service names to container names
 	containerName := service
 	switch service {
 	case "namenode":
@@ -301,14 +342,18 @@ func (m *Manager) runContainer(ctx context.Context, spec ServiceSpec) error {
 	imageName := spec.ContainerCfg.Image
 	_, _, err := m.cli.ImageInspectWithRaw(ctx, imageName)
 	if err != nil {
-		m.step(fmt.Sprintf("Image %s not found locally. Pulling image...", imageName))
-		reader, err := m.cli.ImagePull(ctx, imageName, image.PullOptions{})
-		if err != nil {
-			return fmt.Errorf("pull image %s: %w", imageName, err)
+		label := fmt.Sprintf("Pulling %s", imageName)
+		m.begin(label)
+		reader, pullErr := m.cli.ImagePull(ctx, imageName, image.PullOptions{})
+		if pullErr != nil {
+			if m.pr != nil {
+				m.pr.Fail(label)
+			}
+			return fmt.Errorf("pull image %s: %w", imageName, pullErr)
 		}
 		defer reader.Close()
 		_, _ = io.Copy(io.Discard, reader)
-		m.ok(fmt.Sprintf("Image %s pulled successfully", imageName))
+		m.done(label, "")
 	}
 
 	created, err := m.cli.ContainerCreate(ctx,
@@ -352,28 +397,28 @@ func (m *Manager) attachShell(ctx context.Context) error {
 }
 
 func (m *Manager) printSummary(cfg Config) {
-	fmt.Printf("\n✅ Cluster started: 1 NameNode + %d DataNode(s)", cfg.DNCount)
+	parts := []string{fmt.Sprintf("1 NameNode + %d DataNode(s)", cfg.DNCount)}
 	if cfg.Preset.IncludesHive() {
-		fmt.Print(" + Hive")
+		parts = append(parts, "Hive")
 	}
 	if cfg.Preset.IncludesHBase() {
-		fmt.Print(" + HBase")
+		parts = append(parts, "HBase")
 	}
-	fmt.Println()
-	fmt.Println()
-	fmt.Println("  🌐 NameNode UI:         http://localhost:9870")
-	fmt.Println("  🌐 YARN UI:             http://localhost:8088")
-	fmt.Println("  🌐 JobHistory UI:        http://localhost:19888")
+	fmt.Fprintf(os.Stderr, "  Cluster: %s\n\n", strings.Join(parts, " + "))
+
+	fmt.Println("  🌐 NameNode UI:       http://localhost:9870")
+	fmt.Println("  🌐 YARN UI:           http://localhost:8088")
+	fmt.Println("  🌐 JobHistory UI:     http://localhost:19888")
 	if cfg.Preset.IncludesHive() {
-		fmt.Println("  🌐 HiveServer2 JDBC:    localhost:10000")
+		fmt.Println("  🌐 HiveServer2 JDBC: localhost:10000")
 	}
 	if cfg.Preset.IncludesHBase() {
-		fmt.Println("  🌐 HBase Master UI:     http://localhost:16010")
+		fmt.Println("  🌐 HBase Master UI:  http://localhost:16010")
 	}
 	fmt.Println()
-	fmt.Println("  hadoop-dev status       — show container health")
-	fmt.Println("  hadoop-dev logs -f      — stream NameNode logs")
-	fmt.Println("  hadoop-dev stop         — tear everything down")
+	fmt.Println("  hadoop-dev status     — show container health")
+	fmt.Println("  hadoop-dev logs -f    — stream NameNode logs")
+	fmt.Println("  hadoop-dev stop       — tear everything down")
 }
 
 // ─── OS helpers ───────────────────────────────────────────────────────────

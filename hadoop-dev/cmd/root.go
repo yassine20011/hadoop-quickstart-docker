@@ -1,13 +1,19 @@
 package cmd
 
 import (
-	"fmt"
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 )
 
-var workDir string
+var (
+	workDir string
+	noColor bool
+	verbose bool
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "hadoop-dev",
@@ -16,18 +22,27 @@ var rootCmd = &cobra.Command{
 
 No WSL, no docker-compose, no Bash required.
 The only prerequisite is a running Docker daemon.`,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+func Execute() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return rootCmd.ExecuteContext(ctx)
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(
 		&workDir, "work-dir", ".",
 		"project directory containing shared/ and hadoop.env",
+	)
+	rootCmd.PersistentFlags().BoolVar(
+		&noColor, "no-color", false,
+		"disable colored output",
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&verbose, "verbose", "v", false,
+		"show detailed per-step output",
 	)
 }
