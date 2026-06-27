@@ -43,12 +43,8 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
-extra_files:
-  - glob: "install.sh"
-  - glob: "install.ps1"
-
 release:
-  draft: true
+  draft: false
   prerelease: auto
   name_template: "v{{.Version}}"
   extra_files:
