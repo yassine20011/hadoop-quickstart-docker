@@ -18,15 +18,21 @@ No 10GB VMs, no VirtualBox kernel issues, and no messy bash scripts or `docker-c
 
 ## 🚀 Installation
 
-1. **Download** the latest binary for your OS from the [Releases](../../releases) page.
-2. **Install it globally** by running the `install` command. This will copy the binary to your system PATH so you can use it from any directory:
-
+**Linux & macOS:**
 ```bash
-# Run this from wherever you downloaded the binary
-./hadoop-dev install
+curl -fsSL https://github.com/yassine20011/hadoop-quickstart-docker/releases/latest/download/install.sh | bash
 ```
 
-*(On Windows, `hadoop-dev.exe install` will automatically add itself to your User PATH via PowerShell!)*
+**Windows (PowerShell):**
+```powershell
+iwr -useb https://github.com/yassine20011/hadoop-quickstart-docker/releases/latest/download/install.ps1 | iex
+```
+
+### Updating
+Once installed, you can update to the latest version at any time:
+```bash
+hadoop-dev update
+```
 
 ---
 
