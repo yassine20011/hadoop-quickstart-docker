@@ -7,13 +7,13 @@ HDFS_BIN="${HADOOP_HOME}/bin/hdfs"
 DATA_DIR="/tmp/hadoop-root/dfs/data"
 
 export PATH="${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH}"
+export HADOOP_OPTS="${HADOOP_OPTS:--XX:+TieredCompilation -XX:TieredStopAtLevel=1}"
 
 echo "Starting DataNode in $(hostname)..."
 
-
 echo "Waiting for NameNode..."
-if ! timeout 180 bash -c "until \"${HDFS_BIN}\" dfsadmin -report >/dev/null 2>&1; do sleep 2; done"; then
-  echo "ERROR: NameNode not reachable after 180s"
+if ! timeout 180 bash -c 'until nc -z namenode 8020 2>/dev/null; do sleep 0.2; done'; then
+  echo "ERROR: NameNode port 8020 not reachable after 180s"
   exit 1
 fi
 echo "NameNode is ready."
@@ -27,7 +27,12 @@ if ! yarn --daemon start nodemanager; then
   echo "WARNING: NodeManager did not start on $(hostname)"
 fi
 
-sleep 2
+for i in {1..20}; do
+  if jps | grep -q "DataNode"; then
+    break
+  fi
+  sleep 0.1
+done
 jps
 
 if ! jps | grep -q "DataNode"; then

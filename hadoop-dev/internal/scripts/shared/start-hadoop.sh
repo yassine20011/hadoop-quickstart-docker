@@ -8,6 +8,7 @@ DATA_DIR="/tmp/hadoop-root/dfs/data"
 LOG_DIR="${HADOOP_HOME}/logs"
 
 export PATH="${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH}"
+export HADOOP_OPTS="${HADOOP_OPTS:--XX:+TieredCompilation -XX:TieredStopAtLevel=1}"
 
 if [ -z "${HDFS_BIN}" ]; then
 	if command -v hdfs >/dev/null 2>&1; then
@@ -61,7 +62,12 @@ yarn --daemon start nodemanager || true &
 mapred --daemon start historyserver || true &
 wait
 
-sleep 3
+for i in {1..20}; do
+	if jps | grep -q "NameNode"; then
+		break
+	fi
+	sleep 0.1
+done
 jps
 
 if ! jps | grep -q "NameNode"; then
