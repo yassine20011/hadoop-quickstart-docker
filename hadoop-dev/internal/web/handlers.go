@@ -468,6 +468,7 @@ const configTmpl = `
 type configEntry struct{ Key, Val string }
 
 func (s *Server) handleConfigGet(w http.ResponseWriter, r *http.Request) {
+	_, _, _ = config.EnsureHadoopEnv(s.workDir)
 	envPath := filepath.Join(s.workDir, "hadoop.env")
 	envs, err := config.ParseHadoopEnvRaw(envPath)
 	if err != nil {

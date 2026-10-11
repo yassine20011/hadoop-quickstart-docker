@@ -2,30 +2,24 @@ package config
 
 import (
 	"bufio"
+	_ "embed"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
-// ParseHadoopEnv reads a hadoop.env file and returns a Docker-compatible
-// KEY=VALUE slice, skipping blank lines and comments.
+//go:embed default.env
+var DefaultHadoopEnv []byte
+
 func ParseHadoopEnv(path string) ([]string, error) {
 	all, err := ParseHadoopEnvRaw(path)
 	if err != nil {
 		return nil, err
 	}
-	var envs []string
-	for _, line := range all {
-		if strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-			continue
-		}
-		envs = append(envs, line)
-	}
-	return envs, nil
+	return filterEnvLines(all), nil
 }
 
-// ParseHadoopEnvRaw returns every non-empty line including comments.
-// Used by the config editor to round-trip the file without losing comments.
 func ParseHadoopEnvRaw(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -42,4 +36,46 @@ func ParseHadoopEnvRaw(path string) ([]string, error) {
 		}
 	}
 	return lines, scanner.Err()
+}
+
+func parseRawBytes(data []byte) []string {
+	var lines []string
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), " \t")
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func filterEnvLines(lines []string) []string {
+	var envs []string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+			continue
+		}
+		envs = append(envs, line)
+	}
+	return envs
+}
+
+func EnsureHadoopEnv(workDir string) ([]string, bool, error) {
+	envPath := filepath.Join(workDir, "hadoop.env")
+	created := false
+
+	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+		if err := os.WriteFile(envPath, DefaultHadoopEnv, 0o644); err == nil {
+			created = true
+		} else {
+			return filterEnvLines(parseRawBytes(DefaultHadoopEnv)), false, nil
+		}
+	}
+
+	envs, err := ParseHadoopEnv(envPath)
+	if err != nil {
+		return filterEnvLines(parseRawBytes(DefaultHadoopEnv)), false, nil
+	}
+	return envs, created, nil
 }

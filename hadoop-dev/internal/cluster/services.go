@@ -95,6 +95,9 @@ func NameNodeSpec(workDir string, hadoopEnv []string) ServiceSpec {
 	defaults := []string{
 		"CORE_CONF_fs_defaultFS=hdfs://namenode:8020",
 		"START_LOCAL_DATANODE=false",
+		"HDFS_CONF_dfs_replication=1",
+		"HDFS_CONF_dfs_blocksize=134217728",
+		"HDFS_CONF_dfs_namenode_safemode_extension=0",
 		"HADOOP_OPTS=-XX:+TieredCompilation -XX:TieredStopAtLevel=1",
 	}
 	env := mergeEnv(defaults, hadoopEnv...)
@@ -130,6 +133,8 @@ func NameNodeSpec(workDir string, hadoopEnv []string) ServiceSpec {
 func DataNodeSpec(n int, workDir string, hadoopEnv []string) ServiceSpec {
 	defaults := []string{
 		"CORE_CONF_fs_defaultFS=hdfs://namenode:8020",
+		"HDFS_CONF_dfs_replication=1",
+		"HDFS_CONF_dfs_blocksize=134217728",
 		"HADOOP_OPTS=-XX:+TieredCompilation -XX:TieredStopAtLevel=1",
 	}
 	env := mergeEnv(defaults, hadoopEnv...)

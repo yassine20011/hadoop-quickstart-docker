@@ -139,12 +139,12 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	// Parse hadoop.env
-	envPath := filepath.Join(workDir, "hadoop.env")
-	hadoopEnv, err := config.ParseHadoopEnv(envPath)
-	if err != nil {
-		m.warn(fmt.Sprintf("hadoop.env not found at %s — using empty config", envPath))
-		hadoopEnv = nil
+	// Load or create default hadoop.env
+	hadoopEnv, created, err := config.EnsureHadoopEnv(workDir)
+	if created {
+		m.sub(fmt.Sprintf("Created default hadoop.env at %s", filepath.Join(workDir, "hadoop.env")))
+	} else if err != nil {
+		m.warn(fmt.Sprintf("Could not load hadoop.env: %v", err))
 	}
 
 	if m.pr != nil {
