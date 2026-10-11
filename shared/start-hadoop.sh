@@ -8,6 +8,7 @@ DATA_DIR="/tmp/hadoop-root/dfs/data"
 LOG_DIR="${HADOOP_HOME}/logs"
 
 export PATH="${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH}"
+export HADOOP_OPTS="${HADOOP_OPTS:--XX:+TieredCompilation -XX:TieredStopAtLevel=1}"
 
 if [ -z "${HDFS_BIN}" ]; then
 	if command -v hdfs >/dev/null 2>&1; then
@@ -55,14 +56,18 @@ else
 	echo "Skipping local DataNode startup (START_LOCAL_DATANODE=${START_LOCAL_DATANODE})"
 fi
 
-echo "Starting YARN..."
-yarn --daemon start resourcemanager || true
-yarn --daemon start nodemanager || true
+echo "Starting YARN and MapReduce..."
+yarn --daemon start resourcemanager || true &
+yarn --daemon start nodemanager || true &
+mapred --daemon start historyserver || true &
+wait
 
-echo "Starting MapReduce JobHistory..."
-mapred --daemon start historyserver || true
-
-sleep 3
+for i in {1..20}; do
+	if jps | grep -q "NameNode"; then
+		break
+	fi
+	sleep 0.1
+done
 jps
 
 if ! jps | grep -q "NameNode"; then
