@@ -55,12 +55,11 @@ else
 	echo "Skipping local DataNode startup (START_LOCAL_DATANODE=${START_LOCAL_DATANODE})"
 fi
 
-echo "Starting YARN..."
-yarn --daemon start resourcemanager || true
-yarn --daemon start nodemanager || true
-
-echo "Starting MapReduce JobHistory..."
-mapred --daemon start historyserver || true
+echo "Starting YARN and MapReduce..."
+yarn --daemon start resourcemanager || true &
+yarn --daemon start nodemanager || true &
+mapred --daemon start historyserver || true &
+wait
 
 sleep 3
 jps
