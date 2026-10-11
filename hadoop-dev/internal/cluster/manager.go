@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"hadoop-dev/internal/config"
@@ -175,15 +176,28 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 	}
 	m.done(label, "")
 
-	// Start DataNodes
+	// Start DataNodes in parallel
+	type dnErr struct {
+		n   int
+		err error
+	}
+	dnErrs := make(chan dnErr, cfg.DNCount)
 	for i := 1; i <= cfg.DNCount; i++ {
 		label := fmt.Sprintf("Starting DataNode %d", i)
 		m.begin(label)
-		spec := DataNodeSpec(i, workDir, hadoopEnv)
-		if err := m.runContainer(ctx, spec); err != nil {
-			return fmt.Errorf("start DataNode %d: %w", i, err)
+		go func(n int, lbl string) {
+			spec := DataNodeSpec(n, workDir, hadoopEnv)
+			err := m.runContainer(ctx, spec)
+			if err == nil {
+				m.done(lbl, "")
+			}
+			dnErrs <- dnErr{n, err}
+		}(i, label)
+	}
+	for i := 0; i < cfg.DNCount; i++ {
+		if de := <-dnErrs; de.err != nil {
+			return fmt.Errorf("start DataNode %d: %w", de.n, de.err)
 		}
-		m.done(label, "")
 	}
 
 	// Wait for NameNode
@@ -268,9 +282,15 @@ func (m *Manager) Stop(ctx context.Context) error {
 
 func (m *Manager) stopSilent(ctx context.Context) error {
 	allNames := AllContainerNames(10)
+	var wg sync.WaitGroup
 	for _, name := range allNames {
-		_ = m.cli.ContainerRemove(ctx, name, container.RemoveOptions{Force: true})
+		wg.Add(1)
+		go func(n string) {
+			defer wg.Done()
+			_ = m.cli.ContainerRemove(ctx, n, container.RemoveOptions{Force: true})
+		}(name)
 	}
+	wg.Wait()
 	_ = m.cli.NetworkRemove(ctx, NetworkName)
 	return nil
 }

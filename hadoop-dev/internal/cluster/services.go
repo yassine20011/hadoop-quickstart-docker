@@ -92,10 +92,12 @@ func hadoopNetwork() *network.NetworkingConfig {
 // ─── NameNode ─────────────────────────────────────────────────────────────
 
 func NameNodeSpec(workDir string, hadoopEnv []string) ServiceSpec {
-	env := mergeEnv(hadoopEnv,
+	defaults := []string{
 		"CORE_CONF_fs_defaultFS=hdfs://namenode:8020",
 		"START_LOCAL_DATANODE=false",
-	)
+		"HADOOP_OPTS=-XX:+TieredCompilation -XX:TieredStopAtLevel=1",
+	}
+	env := mergeEnv(defaults, hadoopEnv...)
 	ports, bindings := mustPortMap(map[string]string{
 		"9870": "9870",
 		"8088": "8088",
@@ -126,9 +128,11 @@ func NameNodeSpec(workDir string, hadoopEnv []string) ServiceSpec {
 // ─── DataNode ─────────────────────────────────────────────────────────────
 
 func DataNodeSpec(n int, workDir string, hadoopEnv []string) ServiceSpec {
-	env := mergeEnv(hadoopEnv,
+	defaults := []string{
 		"CORE_CONF_fs_defaultFS=hdfs://namenode:8020",
-	)
+		"HADOOP_OPTS=-XX:+TieredCompilation -XX:TieredStopAtLevel=1",
+	}
+	env := mergeEnv(defaults, hadoopEnv...)
 	return ServiceSpec{
 		Name: DataNodeContainerName(n),
 		ContainerCfg: &container.Config{
