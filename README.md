@@ -89,13 +89,37 @@ Tear everything down cleanly:
 hadoop-dev stop
 ```
 
+### 🐷 Apache Pig Support
+
+You can install and run Apache Pig 0.17.0 for MapReduce scripting:
+
+```bash
+# 1. Download and install Pig into the shared folder
+hadoop-dev pig install
+
+# 2. Launch the interactive Grunt shell in NameNode
+hadoop-dev pig
+
+# Or execute a Pig script directly
+hadoop-dev pig -f /shared/script.pig
+```
+
 ---
 
 ## 📂 The `shared/` Directory
 
-When you start the cluster, `hadoop-dev` will automatically create a `shared/` folder in your current working directory. 
+`hadoop-dev` uses a persistent workspace (defaults to `~/.hadoop-dev/`, or your current directory if running inside an initialized project repository).
 
-This folder acts as a bridge between your host machine and the Docker containers. Any file you drop in here is instantly accessible inside the containers at `/shared`.
+The `shared/` folder acts as a bridge between your host machine and the Docker containers:
+* **Host Location**: Printed on startup (e.g. `~/.hadoop-dev/shared` or `./shared`)
+* **Container Location**: Mounted inside all containers at `/shared`
+
+Drop any datasets (CSV, JSON, Parquet) or scripts here, and access them immediately inside the containers:
+```bash
+# Inside the NameNode shell:
+hdfs dfs -put /shared/mydata.csv /
+hdfs dfs -ls /
+```
 
 ---
 

@@ -21,6 +21,7 @@ import (
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"golang.org/x/term"
 )
 
 // Manager is the main orchestrator. It holds an authenticated Docker client.
@@ -258,7 +259,7 @@ func (m *Manager) Start(ctx context.Context, cfg Config) error {
 	if m.pr != nil {
 		m.pr.Elapsed(time.Since(startedAt))
 	}
-	m.printSummary(cfg)
+	m.printSummary(cfg, workDir)
 	if m.emitFn != nil {
 		m.emitFn("done", "Cluster ready")
 	}
@@ -391,32 +392,66 @@ func (m *Manager) runContainer(ctx context.Context, spec ServiceSpec) error {
 }
 
 func (m *Manager) attachShell(ctx context.Context) error {
+	cmd := []string{"bash", "-lc",
+		"export HADOOP_HOME=/opt/hadoop-3.2.1 && " +
+			"export PATH=${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH} && " +
+			"echo \"\" && echo \"  💡 Tip: Host shared folder is mapped to '/shared'.\" && " +
+			"echo \"     Upload to HDFS: hdfs dfs -put /shared/<filename> /\" && echo \"\" && " +
+			"exec bash -i"}
+	return m.execInteractive(ctx, cmd)
+}
+
+func (m *Manager) ExecPig(ctx context.Context, args []string) error {
+	inspect, err := m.cli.ContainerInspect(ctx, ContainerNameNode)
+	if err != nil || !inspect.State.Running {
+		return fmt.Errorf("Hadoop cluster is not running. Start it with 'hadoop-dev start' first.")
+	}
+
+	pigCmd := "export HADOOP_HOME=/opt/hadoop-3.2.1 && " +
+		"export PIG_HOME=/shared/pig-0.17.0 && " +
+		"export PIG_CLASSPATH=/opt/hadoop-3.2.1/etc/hadoop && " +
+		"export PATH=${PIG_HOME}/bin:${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH} && " +
+		"chmod +x /shared/pig-0.17.0/bin/* 2>/dev/null || true; " +
+		"exec pig \"$@\""
+
+	cmd := []string{"bash", "-lc", pigCmd, "bash"}
+	cmd = append(cmd, args...)
+
+	return m.execInteractive(ctx, cmd)
+}
+
+func (m *Manager) execInteractive(ctx context.Context, cmd []string) error {
+	isTTY := term.IsTerminal(int(os.Stdin.Fd()))
 	execCfg := container.ExecOptions{
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
-		Tty:          true,
-		Cmd: []string{"bash", "-lc",
-			"export HADOOP_HOME=/opt/hadoop-3.2.1 && " +
-				"export PATH=${HADOOP_HOME}/bin:${HADOOP_HOME}/sbin:${PATH} && " +
-				"exec bash -i"},
+		Tty:          isTTY,
+		Cmd:          cmd,
 	}
 	resp, err := m.cli.ContainerExecCreate(ctx, ContainerNameNode, execCfg)
 	if err != nil {
 		return err
 	}
-	attach, err := m.cli.ContainerExecAttach(ctx, resp.ID, container.ExecAttachOptions{Tty: true})
+	attach, err := m.cli.ContainerExecAttach(ctx, resp.ID, container.ExecAttachOptions{Tty: isTTY})
 	if err != nil {
 		return err
 	}
 	defer attach.Close()
+
+	if isTTY {
+		oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+		if err == nil {
+			defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
+		}
+	}
 
 	go func() { _, _ = io.Copy(attach.Conn, os.Stdin) }()
 	_, _ = io.Copy(os.Stdout, attach.Reader)
 	return nil
 }
 
-func (m *Manager) printSummary(cfg Config) {
+func (m *Manager) printSummary(cfg Config, workDir string) {
 	parts := []string{fmt.Sprintf("1 NameNode + %d DataNode(s)", cfg.DNCount)}
 	if cfg.Preset.IncludesHive() {
 		parts = append(parts, "Hive")
@@ -435,6 +470,9 @@ func (m *Manager) printSummary(cfg Config) {
 	if cfg.Preset.IncludesHBase() {
 		fmt.Println("  🌐 HBase Master UI:  http://localhost:16010")
 	}
+	fmt.Println()
+	fmt.Printf("  📁 Shared folder:     %s\n", filepath.Join(workDir, "shared"))
+	fmt.Println("                        ↳ Mapped to /shared in containers (put datasets here)")
 	fmt.Println()
 	fmt.Println("  hadoop-dev status     — show container health")
 	fmt.Println("  hadoop-dev logs -f    — stream NameNode logs")

@@ -37,5 +37,23 @@ func ExtractTo(workDir string) error {
 			return err
 		}
 	}
+
+	readmePath := filepath.Join(sharedDir, "README.txt")
+	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
+		readmeText := "===================================================================\n" +
+			" Hadoop Dev - Shared Directory\n" +
+			"===================================================================\n\n" +
+			"Files placed in this directory on your host machine are\n" +
+			"automatically mounted inside the Hadoop containers at:\n" +
+			"  /shared\n\n" +
+			"You can drop datasets (CSV, JSON, Parquet, TXT) or JAR files here.\n\n" +
+			"Common commands (inside the NameNode shell):\n" +
+			"  hdfs dfs -put /shared/<filename> /\n" +
+			"  hdfs dfs -ls /\n" +
+			"  hdfs dfs -cat /<filename>\n" +
+			"===================================================================\n"
+		_ = os.WriteFile(readmePath, []byte(readmeText), 0o644)
+	}
+
 	return nil
 }

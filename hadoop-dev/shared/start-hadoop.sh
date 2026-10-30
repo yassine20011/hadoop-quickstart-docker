@@ -25,6 +25,7 @@ if [ -d "/shared/pig-0.17.0" ]; then
 	export PIG_HOME="/shared/pig-0.17.0"
 	export PIG_CLASSPATH="${HADOOP_CONF_DIR:-${HADOOP_HOME}/etc/hadoop}"
 	export PATH="${PIG_HOME}/bin:${PATH}"
+	chmod +x /shared/pig-0.17.0/bin/* 2>/dev/null || true
 	grep -q "PIG_HOME" /root/.bashrc 2>/dev/null || cat >> /root/.bashrc <<'EOF'
 export PIG_HOME=/shared/pig-0.17.0
 export PIG_CLASSPATH=/opt/hadoop-3.2.1/etc/hadoop

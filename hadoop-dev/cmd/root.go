@@ -6,6 +6,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"hadoop-dev/internal/config"
+
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +26,14 @@ No WSL, no docker-compose, no Bash required.
 The only prerequisite is a running Docker daemon.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		resolved, err := config.ResolveWorkDir(workDir)
+		if err != nil {
+			return err
+		}
+		workDir = resolved
+		return nil
+	},
 }
 
 func Execute() error {
@@ -34,8 +44,8 @@ func Execute() error {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(
-		&workDir, "work-dir", ".",
-		"project directory containing shared/ and hadoop.env",
+		&workDir, "work-dir", "",
+		"project directory containing shared/ and hadoop.env (default: ~/.hadoop-dev or current dir if initialized)",
 	)
 	rootCmd.PersistentFlags().BoolVar(
 		&noColor, "no-color", false,
